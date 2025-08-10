@@ -169,8 +169,11 @@
                     <Separator Grid.Row="6"/>-->
 
                     <StackPanel Grid.Row="5" Orientation="Vertical" Margin="10,0">
-                        <Grid ToolTip="Check version on startup">
+                        <!--<Grid ToolTip="Check version on startup">
                             <CheckBox x:Name="UpdateCheckerOption" IsChecked="{Binding Path=(local:Config.UpdateChecker), Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Content="Update Checker" HorizontalAlignment="Left" VerticalAlignment="Top" />
+                        </Grid>-->
+                        <Grid ToolTip="Disable mods when FrostyFix is closed">
+                            <CheckBox x:Name="AutoDisableModsOption" IsChecked="{Binding Path=(local:Config.DisableModsOnClose), Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Content="Automatically Disable Mods" HorizontalAlignment="Left" VerticalAlignment="Top" />
                         </Grid>
                     </StackPanel>
 

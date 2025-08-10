@@ -1,4 +1,7 @@
-﻿using System;
+﻿using DyviniaUtils.Dialogs;
+using Gapotchenko.FX.Diagnostics;
+using Microsoft.Win32;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
@@ -10,9 +13,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using Gapotchenko.FX.Diagnostics;
-using Microsoft.Win32;
-using DyviniaUtils.Dialogs;
+using static FrostyFix.MainWindow;
 
 namespace FrostyFix {
     /// <summary>
@@ -34,7 +35,8 @@ namespace FrostyFix {
         }
 
 
-        public MainWindow() {
+        public MainWindow()
+        {
             InitializeComponent();
 
             GameSelectorDropdown.ItemsSource = GameList;
@@ -42,14 +44,29 @@ namespace FrostyFix {
             GameSelectorDropdown.SelectionChanged += (s, e) => CheckModData();
             MouseDown += (s, e) => FocusManager.SetFocusedElement(this, this);
 
+            Loaded += MainWindow_Loaded;
+            Closed += MainWindow_Closed;
+        }
+
+        private void MainWindow_Closed(object sender, EventArgs e)
+        {
+            if(Config.Settings.DisableModsOnClose)
+            {
+                DisableMods();
+            }
+        }
+
+        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
             LocateInstalls();
             CheckStatus();
             CheckLaunchEnable();
             RefreshLaunchButton();
             LoadSelections();
 
-            //Thread checkGameStatus = new(GameStatusThread) { IsBackground = true };
-            //checkGameStatus.Start();
+            EADPlat.IsChecked = false;
+            EGSPlat.IsChecked = false;
+            GlobalPlat.IsChecked = true;
         }
 
         public void LocateInstalls() {
@@ -62,6 +79,7 @@ namespace FrostyFix {
                 new Game { DisplayName = "Need for Speed", FileName = "NFS16", Path = @"SOFTWARE\EA Games\Need for Speed" },
                 new Game { DisplayName = "Need for Speed: Payback", FileName = "NeedForSpeedPayback", Path = @"SOFTWARE\EA Games\Need for Speed Payback" },
                 new Game { DisplayName = "Plants vs. Zombies: Garden Warfare 2", FileName = "GW2.Main_Win64_Retail", Path = @"SOFTWARE\PopCap\Plants vs Zombies GW2" },
+                new Game { DisplayName = "Plants vs. Zombies: Garden Warfare", FileName = "PVZ.Main_Win64_Retail", Path = @"SOFTWARE\WOW6432Node\PopCap\Plants vs Zombies Garden Warfare" },
                 new Game { DisplayName = "Dragon Age: Inquisition", FileName = "DragonAgeInquisition", Path = @"SOFTWARE\Wow6432Node\Bioware\Dragon Age Inquisition" }
             };
 
@@ -212,31 +230,42 @@ namespace FrostyFix {
             }
         }
 
-        public void CheckModData() {
+        public void CheckModData()
+        {
             PackList.Items.Clear();
 
             // Check to see if valid item
-            if (GameSelectorDropdown.SelectedItem == null) return;
+            if (GameSelectorDropdown.SelectedItem == null)
+            {
+                LaunchButton.IsEnabled = false;
+                return;
+            }
 
             // Fill list
-            string path = (GameSelectorDropdown.SelectedItem as Game).Path + "ModData\\";
-            Directory.CreateDirectory(path);
+            Game selectedGame = GameSelectorDropdown.SelectedItem as Game;
+            string modDataPath = Path.Combine(selectedGame.Path, "ModData");
 
-            if (Directory.Exists(path + "\\Data") || (Directory.GetDirectories(path).Length == 0)) 
-                PackList.Items.Add("ModData");
+            if (!Directory.Exists(modDataPath) || Directory.GetDirectories(modDataPath).Length == 0)
+            {
+                LaunchButton.IsEnabled = false;
+                MessageBoxDialog.Show($"No modpacks found for {selectedGame.DisplayName}. You must apply mods through Frosty before using FrostyFix.", Title, MessageBoxButton.OK, DialogSound.Notify);
+                return;
+            }
 
-            else 
-                foreach (string dir in Directory.GetDirectories(path))
-                    PackList.Items.Add(new DirectoryInfo(dir).Name);
+            foreach (string dir in Directory.GetDirectories(modDataPath))
+            {
+                PackList.Items.Add(new DirectoryInfo(dir).Name);
+            }
 
             PackList.SelectedIndex = 0;
             CheckLaunchEnable();
         }
 
-        public async void CheckLaunchEnable() {
+        public async void CheckLaunchEnable()
+        {
             await Task.Delay(100);
             bool isChecked = EADPlat.IsChecked == true || EGSPlat.IsChecked == true || OriginPlat.IsChecked == true || GlobalPlat.IsChecked == true;
-            LaunchButton.IsEnabled = GameSelectorDropdown.SelectedItem != null && isChecked;
+            LaunchButton.IsEnabled = GameSelectorDropdown.SelectedItem != null && PackList.Items.Count > 0 && isChecked;
         }
 
         public async void LaunchWithMods() {
@@ -273,6 +302,11 @@ namespace FrostyFix {
                 p.Start();
             }
             else Environment.SetEnvironmentVariable("GAME_DATA_DIR", packPath, EnvironmentVariableTarget.User);
+
+            if(Config.Settings.DisableModsOnClose)
+            {
+                MessageBoxDialog.Show($"Mods have been enabled, and will be automatically disabled when you close FrostyFix. This behavior can be changed in Settings.", Title, MessageBoxButton.OK, DialogSound.Notify);
+            }
 
             Mouse.OverrideCursor = null;
             await Task.Delay(4000);
@@ -351,23 +385,23 @@ namespace FrostyFix {
         }
 
         private void SaveSelections() {
-            List<RadioButton> radioButtons = new() { EADPlat, EGSPlat, OriginPlat, GlobalPlat };
+            //List<RadioButton> radioButtons = new() { EADPlat, EGSPlat, OriginPlat, GlobalPlat };
 
             Config.Settings.SelectedGame = GameSelectorDropdown.SelectedIndex;
-            Config.Settings.SelectedPlatform = radioButtons.IndexOf(radioButtons.FirstOrDefault(r => (bool)r.IsChecked));
+            //Config.Settings.SelectedPlatform = radioButtons.IndexOf(radioButtons.FirstOrDefault(r => (bool)r.IsChecked));
 
             Config.Save();
         }
 
         private void LoadSelections() {
-            List<RadioButton> radioButtons = new() { EADPlat, EGSPlat, OriginPlat, GlobalPlat };
+            //List<RadioButton> radioButtons = new() { EADPlat, EGSPlat, OriginPlat, GlobalPlat };
 
             if (Config.Settings.SelectedGame > -1)
                 if (Config.Settings.SelectedGame < GameSelectorDropdown.Items.Count)
                     GameSelectorDropdown.SelectedIndex = Config.Settings.SelectedGame;
 
-            if (Config.Settings.SelectedPlatform > -1)
-                radioButtons[Config.Settings.SelectedPlatform].IsChecked = true;
+            //if (Config.Settings.SelectedPlatform > -1)
+            //    radioButtons[Config.Settings.SelectedPlatform].IsChecked = true;
         }
 
         protected override void OnClosed(EventArgs e) {

@@ -16,7 +16,7 @@
                 <RowDefinition Height="32"/>
             </Grid.RowDefinitions>
             <Border Grid.Row="0" Padding="5">
-                <TextBlock Text="Message" x:Name="MessageText" VerticalAlignment="Center" HorizontalAlignment="Center" TextAlignment="Center"/>
+                <TextBlock Text="Message" x:Name="MessageText" TextWrapping="Wrap" VerticalAlignment="Center" HorizontalAlignment="Center" TextAlignment="Center"/>
             </Border>
             <Separator Height="1" Margin="0" VerticalAlignment="Bottom"/>
 

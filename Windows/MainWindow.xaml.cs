@@ -19,16 +19,34 @@ namespace FrostyFix {
     /// <summary>
     /// Interaction logic for MainWindow.xaml
     /// </summary>
-    public partial class MainWindow : Window {
+    public partial class MainWindow : Window
+    {
+        public ObservableCollection<Game> GameList = new();
 
-        public class Game {
+        private static readonly List<Game> s_gameEntries =
+            [
+                new Game { HasEAAC = false, DisplayName = "Star Wars: Battlefront", FileName = "starwarsbattlefront", Path = @"SOFTWARE\Wow6432Node\EA Games\STAR WARS Battlefront" },
+                new Game { HasEAAC = false, DisplayName = "Star Wars: Battlefront II", FileName = "starwarsbattlefrontii", Path = @"SOFTWARE\EA Games\STAR WARS Battlefront II" },
+                new Game { HasEAAC = true, DisplayName = "Battlefield One", FileName = "bf1", Path = @"SOFTWARE\WOW6432Node\EA Games\Battlefield 1" },
+                new Game { HasEAAC = false, DisplayName = "Mass Effect: Andromeda", FileName = "MassEffectAndromeda", Path = @"SOFTWARE\WOW6432Node\BioWare\Mass Effect Andromeda" },
+                new Game { HasEAAC = false, DisplayName = "Need for Speed", FileName = "NFS16", Path = @"SOFTWARE\EA Games\Need for Speed" },
+                new Game { HasEAAC = false, DisplayName = "Need for Speed: Payback", FileName = "NeedForSpeedPayback", Path = @"SOFTWARE\EA Games\Need for Speed Payback" },
+                new Game { HasEAAC = true, DisplayName = "Plants vs. Zombies: Garden Warfare 2", FileName = "GW2.Main_Win64_Retail", Path = @"SOFTWARE\PopCap\Plants vs Zombies GW2" },
+                new Game { HasEAAC = false, DisplayName = "Plants vs. Zombies: Garden Warfare", FileName = "PVZ.Main_Win64_Retail", Path = @"SOFTWARE\WOW6432Node\PopCap\Plants vs Zombies Garden Warfare" },
+                new Game { HasEAAC = false, DisplayName = "Dragon Age: Inquisition", FileName = "DragonAgeInquisition", Path = @"SOFTWARE\Wow6432Node\Bioware\Dragon Age Inquisition" }
+            ];
+
+        public class Game
+        {
             public string DisplayName { get; set; }
             public string FileName { get; set; }
             public string Path { get; set; }
+            public bool HasEAAC { get; set; }
         }
-        public ObservableCollection<Game> GameList = new();
 
-        public static class Platforms {
+
+        public static class Platforms
+        {
             public static string Origin { get; set; }
             public static string EADesktop { get; set; }
             public static string EpicGames { get; set; }
@@ -70,34 +88,23 @@ namespace FrostyFix {
         }
 
         public void LocateInstalls() {
-            // List of games & registry keys. Add a new line to add new game
-            List<Game> gameKeys = new() {
-                new Game { DisplayName = "Star Wars: Battlefront", FileName = "starwarsbattlefront", Path = @"SOFTWARE\Wow6432Node\EA Games\STAR WARS Battlefront" },
-                new Game { DisplayName = "Star Wars: Battlefront II", FileName = "starwarsbattlefrontii", Path = @"SOFTWARE\EA Games\STAR WARS Battlefront II" },
-                new Game { DisplayName = "Battlefield One", FileName = "bf1", Path = @"SOFTWARE\WOW6432Node\EA Games\Battlefield 1" },
-                new Game { DisplayName = "Mass Effect: Andromeda", FileName = "MassEffectAndromeda", Path = @"SOFTWARE\WOW6432Node\BioWare\Mass Effect Andromeda" },
-                new Game { DisplayName = "Need for Speed", FileName = "NFS16", Path = @"SOFTWARE\EA Games\Need for Speed" },
-                new Game { DisplayName = "Need for Speed: Payback", FileName = "NeedForSpeedPayback", Path = @"SOFTWARE\EA Games\Need for Speed Payback" },
-                new Game { DisplayName = "Plants vs. Zombies: Garden Warfare 2", FileName = "GW2.Main_Win64_Retail", Path = @"SOFTWARE\PopCap\Plants vs Zombies GW2" },
-                new Game { DisplayName = "Plants vs. Zombies: Garden Warfare", FileName = "PVZ.Main_Win64_Retail", Path = @"SOFTWARE\WOW6432Node\PopCap\Plants vs Zombies Garden Warfare" },
-                new Game { DisplayName = "Dragon Age: Inquisition", FileName = "DragonAgeInquisition", Path = @"SOFTWARE\Wow6432Node\Bioware\Dragon Age Inquisition" }
-            };
-
             // Save selected Index, then clear
             int index = GameSelectorDropdown.SelectedIndex;
             GameSelectorDropdown.SelectedIndex = -1;
             GameList.Clear();
 
             // Fill Game List
-            foreach (Game game in gameKeys) {
-                string path = Registry.LocalMachine.OpenSubKey(game.Path)?.GetValue("Install Dir")?.ToString();
-                if (File.Exists(path + game.FileName + ".exe")) 
-                    GameList.Add(new Game { DisplayName = game.DisplayName, FileName = game.FileName, Path = path });
+            foreach (Game game in s_gameEntries) {
+                string path = Registry.LocalMachine.OpenSubKey(game.Path)?.GetValue("Install Dir")?.ToString() ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(path) && File.Exists(Path.Combine(path, $"{game.FileName}.exe")))
+                {
+                    GameList.Add(new Game { HasEAAC = game.HasEAAC, DisplayName = game.DisplayName, FileName = game.FileName, Path = path });
+                }
             }
 
             if (File.Exists(Config.Settings.CustomGamePath)) {
                 string fileName = Path.GetFileName(Config.Settings.CustomGamePath);
-                GameList.Add(new Game { DisplayName = $"Custom Game ({fileName})", FileName = Path.GetFileNameWithoutExtension(fileName), Path = Path.GetDirectoryName(Config.Settings.CustomGamePath) + "\\" });
+                GameList.Add(new Game { HasEAAC = false, DisplayName = $"Custom Game ({fileName})", FileName = Path.GetFileNameWithoutExtension(fileName), Path = Path.GetDirectoryName(Config.Settings.CustomGamePath) + "\\" });
             }
 
             // Restore index
@@ -268,18 +275,36 @@ namespace FrostyFix {
             LaunchButton.IsEnabled = GameSelectorDropdown.SelectedItem != null && PackList.Items.Count > 0 && isChecked;
         }
 
-        public async void LaunchWithMods() {
+        public async void DeleteCryptBase(Game game)
+        {
+            if (game is null || !game.HasEAAC)
+                return;
+
+            string cryptBasePath = Path.Combine(game.Path, "CryptBase.dll");
+            if (File.Exists(cryptBasePath))
+            {
+                try
+                {
+                    File.Delete(cryptBasePath);
+                }
+                catch { }
+            }
+            await Task.Delay(250);
+        }
+
+        public async void LaunchWithMods()
+        {
             DisableMods();
 
             Mouse.OverrideCursor = Cursors.Wait;
 
             // Locate ModData
-            string path = (GameSelectorDropdown.SelectedItem as Game).Path + "ModData\\";
+            Game selectedGame = GameSelectorDropdown.SelectedItem as Game;
+            string path = selectedGame.Path + "ModData\\";
             string pack = PackList.SelectedItem.ToString();
             string packPath = path + pack;
 
-            if (pack.Contains("ModData") && PackList.SelectedIndex == 0) 
-                packPath = path;
+            DeleteCryptBase(selectedGame);
 
             if (GlobalPlat.IsChecked == false) {
                 Process p = new();
@@ -351,6 +376,8 @@ namespace FrostyFix {
             foreach (Process process in Process.GetProcessesByName("Origin")) process.Kill();
             foreach (Process process in Process.GetProcessesByName("EpicGamesLauncher")) process.Kill();
             foreach (Process process in Process.GetProcessesByName("steam")) process.Kill();
+
+            DeleteCryptBase(GameSelectorDropdown.SelectedItem as Game);
 
             await Task.Delay(2000);
             Mouse.OverrideCursor = null;
